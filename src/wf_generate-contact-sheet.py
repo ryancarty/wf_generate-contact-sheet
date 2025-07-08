@@ -303,17 +303,24 @@ if __name__ == "__main__":
 
 
 
-# ==== OPTIONAL NUKE SCRIPT EXECUTION ====
-            # Ask if user wants to create a Nuke script
+    # ==== OPTIONAL NUKE SCRIPT EXECUTION ====
     make_nuke = input(Fore.CYAN + "\nWould you like to generate a Nuke script from these images? (y/n): " + Style.RESET_ALL).strip().lower()
     if make_nuke == "y":
         print("Generating Nuke script...")
 
-        # Find a safe versioned name for the .nk file
+        if not image_tuples:
+            print(Fore.RED + "❌ No images found to create a Nuke script." + Style.RESET_ALL)
+            sys.exit(1)
+
+        print(f"✅ Preparing {len(image_tuples)} images for the Nuke script...")
+
         nuke_script_name = f"Contact-Sheet_{folder_name}.{version:03}.nk"
         nuke_script_path = os.path.join(output_dir, nuke_script_name)
 
-        # Move all old .nk and .nk.autosave files first
+        # Ensure 'old' folder exists
+        os.makedirs(old_dir, exist_ok=True)
+
+        # Move any old .nk or .nk.autosave files
         for file in os.listdir(output_dir):
             if re.match(rf"Contact-Sheet_{re.escape(folder_name)}\.\d+\.(nk|nk\.autosave)$", file):
                 existing_file = os.path.join(output_dir, file)
@@ -323,30 +330,49 @@ if __name__ == "__main__":
                         os.remove(old_file_path)
                     os.rename(existing_file, old_file_path)
 
-        # Start writing the .nk content
+        # ==== Nuke Node Layout ====
+        spacing = 180
+        start_x = 0
+        lgt_ypos = 0
+        cmp_ypos = 200
+        contact_ypos = 400
+
+        sorted_images = sorted(image_tuples, key=lambda x: os.path.basename(x[0]))
+        print(f"🧪 Generating Nuke script for {len(sorted_images)} images...")
+
+        read_positions = []
         nuke_lines = []
 
-        # Sort images nicely
-        sorted_images = sorted(image_tuples, key=lambda x: os.path.basename(x[0]))
-
         for idx, (img_path, dept) in enumerate(sorted_images):
-            file_path = img_path.replace("\\", "/")  # Forward slashes for Nuke
-            nuke_lines.append(f"Read {{")
+            file_path = img_path.replace("\\", "/")
+            xpos = start_x + idx * spacing
+            ypos = lgt_ypos if dept == "LGT" else cmp_ypos
+
+            nuke_lines.append("Read {")
             nuke_lines.append(f" file \"{file_path}\"")
             nuke_lines.append(f" name Read{idx+1}")
-            nuke_lines.append(f"}}")
-            nuke_lines.append("")  # Space between nodes
+            nuke_lines.append(f" xpos {xpos}")
+            nuke_lines.append(f" ypos {ypos}")
+            nuke_lines.append("}")
+            nuke_lines.append("")
 
-        nuke_lines.append(f"ContactSheet {{")
+            read_positions.append(xpos)
+
+        center_x = (read_positions[0] + read_positions[-1]) // 2 if read_positions else 0
+
+        nuke_lines.append("ContactSheet {")
         nuke_lines.append(f" inputs {len(sorted_images)}")
-        nuke_lines.append(f" width 4096 height 4096")
+        nuke_lines.append(" width 4096 height 4096")
         nuke_lines.append(f" rows {math.ceil(math.sqrt(len(sorted_images)))}")
         nuke_lines.append(f" columns {math.ceil(math.sqrt(len(sorted_images)))}")
-        nuke_lines.append(f" center true")
-        nuke_lines.append(f" name ContactSheet1")
-        nuke_lines.append(f"}}")
+        nuke_lines.append(" center true")
+        nuke_lines.append(f" xpos {center_x}")
+        nuke_lines.append(f" ypos {contact_ypos}")
+        nuke_lines.append(" name ContactSheet1")
+        nuke_lines.append("}")
 
-        # Write out the .nk file
+        print("🧪 Writing Nuke script to:", nuke_script_path)
+
         with open(nuke_script_path, "w") as f:
             f.write("\n".join(nuke_lines))
 
