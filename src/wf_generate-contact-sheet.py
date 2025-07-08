@@ -360,7 +360,7 @@ if __name__ == "__main__":
             # Dot node below the read
             nuke_lines.append("Dot {")
             nuke_lines.append(f" name Dot{idx+1}")
-            nuke_lines.append(f" xpos {xpos}")
+            nuke_lines.append(f" xpos {xpos+34}")
             nuke_lines.append(f" ypos {contact_ypos}")
             nuke_lines.append("}")
             nuke_lines.append("")
@@ -377,7 +377,7 @@ if __name__ == "__main__":
         nuke_lines.append(f" columns {math.ceil(math.sqrt(len(sorted_images)))}")
         nuke_lines.append(" center true")
         nuke_lines.append(f" xpos {center_x}")
-        nuke_lines.append(f" ypos {contact_ypos + 200}")
+        nuke_lines.append(f" ypos {contact_ypos + 20}")
         nuke_lines.append(" name ContactSheet1")
         nuke_lines.append("}")
 
