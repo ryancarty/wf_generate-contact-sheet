@@ -1,3 +1,7 @@
+# ====================================================================================================
+# ================================= CONTACT SHEET GENERATOR | v1.idk =================================
+# ====================================================================================================
+
 import os
 import sys
 import subprocess
@@ -6,7 +10,10 @@ from pathlib import Path
 import math
 import platform
 
-# ==== DEPENDENCY CHECK ====
+# ====================================================================================================
+# ========================================= DEPENDENCY CHECK =========================================
+# ====================================================================================================
+
 dependencies = {
     "PIL": "Pillow",
     "colorama": "colorama"
@@ -42,7 +49,10 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init()
 
-# ==== CONFIGURATION ====
+# ====================================================================================================
+# ======================================= CONFIGURATION ==============================================
+# ====================================================================================================
+
 def get_latest_versioned_files(renders_folder):
     version_pattern = re.compile(r"^(.*?)(\.v\d{3})\.(\d{4})\.png$")
     render_versions = {}
@@ -201,6 +211,231 @@ def create_contact_sheet(image_tuples, output_path, title_text, labeled=False):
     contact_sheet.save(output_path)
     print(f"{Fore.GREEN}✅ Saved: {output_path}{Style.RESET_ALL}")
 
+# ====================================================================================================
+# =================================== NUKE SCRIPT CONFIGURATION ======================================
+# ====================================================================================================
+def create_nuke_script(image_tuples, output_dir, folder_name, version):
+    if not image_tuples:
+        print(Fore.RED + "❌ No images found to create a Nuke script." + Style.RESET_ALL)
+        sys.exit(1)
+
+    print("Generating Nuke script...")
+    print(f"✅ Preparing {len(image_tuples)} images for the Nuke script...")
+
+    nuke_script_name = f"Contact-Sheet_{folder_name}.{version:03}.nk"
+    nuke_script_path = os.path.join(output_dir, nuke_script_name)
+    write_output_path = os.path.join(output_dir, nuke_script_name.replace(".nk", "_edit-v001.png")).replace("\\", "/")
+
+    # Ensure 'old' folder exists
+    old_dir = os.path.join(output_dir, "old")
+    os.makedirs(old_dir, exist_ok=True)
+
+    # Move any old .nk or .nk.autosave files
+    for file in os.listdir(output_dir):
+        if re.match(rf"Contact-Sheet_{re.escape(folder_name)}\.\d+\.(nk|nk\.autosave)$", file):
+            existing_file = os.path.join(output_dir, file)
+            old_file_path = os.path.join(old_dir, file)
+            if os.path.isfile(existing_file):
+                if os.path.exists(old_file_path):
+                    os.remove(old_file_path)
+                os.rename(existing_file, old_file_path)
+
+    # Nuke Node Layout
+    spacing = 180
+    start_x = 0
+    lgt_ypos = 0
+    cmp_ypos = 200
+    contact_ypos = 400
+
+    sorted_images = sorted(image_tuples, key=lambda x: os.path.basename(x[0]))
+    read_positions = []
+    nuke_lines = []
+
+    for idx, (img_path, dept) in enumerate(sorted_images):
+        file_path = img_path.replace("\\", "/")
+        xpos = start_x + idx * spacing
+        ypos = lgt_ypos if dept == "LGT" else cmp_ypos
+
+        # Set color based on department
+        color = "0xffbf00ff" if dept == "LGT" else "0xaa55ffff"
+
+        # Read node
+        nuke_lines.append("Read {")
+        nuke_lines.append(f" file \"{file_path}\"")
+        nuke_lines.append(f" name Read{idx+1}")
+        nuke_lines.append(f" xpos {xpos}")
+        nuke_lines.append(f" ypos {ypos}")
+        nuke_lines.append(f" tile_color {color}")
+        nuke_lines.append("}")
+        nuke_lines.append("")
+
+        # Dot node below the read
+        nuke_lines.append("Dot {")
+        nuke_lines.append(f" name Dot{idx+1}")
+        nuke_lines.append(f" xpos {xpos + 34}")
+        nuke_lines.append(f" ypos {contact_ypos}")
+        nuke_lines.append("}")
+        nuke_lines.append("")
+
+        read_positions.append(xpos)
+
+    center_x = (read_positions[0] + read_positions[-1]) // 2 if read_positions else 0
+
+    # ContactSheet node
+    nuke_lines.append("ContactSheet {")
+    nuke_lines.append(f" inputs {len(sorted_images)}")
+    nuke_lines.append(" width 4096 height 4096")
+    nuke_lines.append(f" rows {math.ceil(math.sqrt(len(sorted_images)))}")
+    nuke_lines.append(f" columns {math.ceil(math.sqrt(len(sorted_images)))}")
+    nuke_lines.append(f" gap 35")
+    nuke_lines.append(f" roworder TopBottom")
+    nuke_lines.append(" center true")
+    nuke_lines.append(f" xpos {center_x}")
+    nuke_lines.append(f" ypos {contact_ypos + 20}")
+    nuke_lines.append(" name ContactSheet1")
+    nuke_lines.append("}")
+
+    # === Post-ContactSheet node chain ===
+    base_y = contact_ypos + 125
+
+    # Reformat
+    nuke_lines.append("Reformat {")
+    nuke_lines.append("name ReformatSheet")
+    nuke_lines.append(" type \"to box\"")
+    nuke_lines.append(" box_width {{ContactSheet1.knob.width}}")
+    nuke_lines.append(" box_height {{ContactSheet1.knob.height+300}}")
+    nuke_lines.append(" box_fixed true")
+    nuke_lines.append(" center false")
+    nuke_lines.append(" filter Mitchell")
+    nuke_lines.append("black_outside true")
+    nuke_lines.append(" name Reformat1")
+    nuke_lines.append(f" xpos {center_x}")
+    nuke_lines.append(f" ypos {base_y}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    # Constant
+    nuke_lines.append("Constant {")
+    nuke_lines.append(" inputs 0")
+    nuke_lines.append(" color 1")
+    nuke_lines.append(" name Constant1")
+    nuke_lines.append(f" xpos {center_x - 112}")
+    nuke_lines.append(f" ypos {base_y}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    # OCIOColorSpace
+    nuke_lines.append("OCIOColorSpace {")
+    nuke_lines.append(" in_colorspace color_picking")
+    nuke_lines.append(" out_colorspace scene_linear")
+    nuke_lines.append(" name OCIOColorSpace1")
+    nuke_lines.append(f" xpos {center_x - 112}")
+    nuke_lines.append(f" ypos {base_y + 72}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    # Reformat
+    nuke_lines.append("Reformat {")
+    nuke_lines.append("name ReformatConstant")
+    nuke_lines.append(" type \"to box\"")
+    nuke_lines.append(" box_width {{ContactSheet1.knob.width}}")
+    nuke_lines.append(" box_height {{ContactSheet1.knob.height+300}}")
+    nuke_lines.append(" box_fixed true")
+    nuke_lines.append(" resize fill")
+    nuke_lines.append(" center false")
+    nuke_lines.append(" filter Mitchell")
+    nuke_lines.append("black_outside true")
+    nuke_lines.append(" name Reformat1")
+    nuke_lines.append(f" xpos {center_x - 112}")
+    nuke_lines.append(f" ypos {base_y + 96}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    # Dot
+    nuke_lines.append("Dot {")
+    nuke_lines.append(" name Dot39")
+    nuke_lines.append(f" xpos {center_x - 78}")
+    nuke_lines.append(f" ypos {base_y + 120}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    
+    # Merge node
+    nuke_lines.append("Merge2 {")
+    nuke_lines.append(" inputs 2")
+    nuke_lines.append(" operation over")
+    nuke_lines.append(" name Merge1")
+    nuke_lines.append(f" xpos {center_x}")
+    nuke_lines.append(f" ypos {base_y + 137}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    # Text node
+    nuke_lines.append("Text2 {")
+    nuke_lines.append(" font_size_toolbar 100")
+    nuke_lines.append(" font_width_toolbar 100")
+    nuke_lines.append(" font_height_toolbar 100")
+    nuke_lines.append(f" message \"Contact Sheet for {folder_name}\"")
+    nuke_lines.append(" box {0 {ContactSheet1.knob.width} {ContactSheet1.knob.width} {Reformat1.box_height-50}}")
+    nuke_lines.append(" xjustify center")
+    nuke_lines.append(" yjustify center")
+    nuke_lines.append(" transforms {{0 2}}")
+    nuke_lines.append(" font_size_values {{0 100}}")
+    nuke_lines.append(" cursor_position 26")
+    nuke_lines.append(" font {{ Arial : Bold : arialbd.ttf : 0 }}")
+    nuke_lines.append(" global_font_scale 1.3")
+    nuke_lines.append(" center {320 240}")
+    nuke_lines.append(" cursor_initialised true")
+    nuke_lines.append(" autofit_bbox false")
+    nuke_lines.append(" initial_cursor_position {{0 4096}}")
+    nuke_lines.append(" color {0 0 0 1}")
+    nuke_lines.append(" name Text1")
+    nuke_lines.append(" label \"Contact Sheet Name\"")
+    nuke_lines.append(f" xpos {center_x}")
+    nuke_lines.append(f" ypos {base_y + 173}")
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+    # Write node
+    nuke_lines.append("Write {")
+    nuke_lines.append(f" file \"{write_output_path}\"")
+    nuke_lines.append(" file_type png")
+    nuke_lines.append(" datatype \"16 bit\"")
+    nuke_lines.append(" colorspace color_picking")
+    nuke_lines.append(" create_directories true")
+    nuke_lines.append(" checkHashOnRead false")
+    nuke_lines.append(" version 2")
+    nuke_lines.append(" ocioColorspace scene_linear")
+    nuke_lines.append(" display ACES")
+    nuke_lines.append(" view sRGB")
+    nuke_lines.append(" name Write2")
+    nuke_lines.append(f" xpos {center_x}")
+    nuke_lines.append(f" ypos {base_y + 220}")
+    nuke_lines.append("}")
+
+    # Viewer node
+    nuke_lines.append("Viewer {")
+    #nuke_lines.append(" frame_range 1-1")
+    nuke_lines.append(" viewerProcess \"sRGB (ACES)\"")
+    nuke_lines.append(" monitorOutNDISenderName \"Nuke - Contact-Sheet Viewer\"")
+    nuke_lines.append(" name Viewer1")
+    nuke_lines.append(f" xpos {center_x}")
+    nuke_lines.append(f" ypos {base_y + 309}")  # 100 units below Write
+    nuke_lines.append("}")
+    nuke_lines.append("")
+
+
+    print("🧪 Writing Nuke script to:", nuke_script_path)
+
+    with open(nuke_script_path, "w") as f:
+        f.write("\n".join(nuke_lines))
+
+    print(Fore.GREEN + f"✅ Nuke script created: {nuke_script_path}" + Style.RESET_ALL)
+
+
+# ====================================================================================================
+# ======================================= MAIN EXECUTION =============================================
+# ====================================================================================================
 
 # ==== MAIN EXECUTION ====
 if __name__ == "__main__":
@@ -294,98 +529,11 @@ if __name__ == "__main__":
     create_contact_sheet(image_tuples, output_labeled, title, labeled=True)
     print(Fore.GREEN + "✅ Contact sheets generated." + Style.RESET_ALL)
 
-    
     print("Generating Nuke script...")
-
-    if not image_tuples:
-        print(Fore.RED + "❌ No images found to create a Nuke script." + Style.RESET_ALL)
-        sys.exit(1)
-
-    print(f"✅ Preparing {len(image_tuples)} images for the Nuke script...")
-
-    nuke_script_name = f"Contact-Sheet_{folder_name}.{version:03}.nk"
-    nuke_script_path = os.path.join(output_dir, nuke_script_name)
-
-    # Ensure 'old' folder exists
-    os.makedirs(old_dir, exist_ok=True)
-
-    # Move any old .nk or .nk.autosave files
-    for file in os.listdir(output_dir):
-        if re.match(rf"Contact-Sheet_{re.escape(folder_name)}\.\d+\.(nk|nk\.autosave)$", file):
-            existing_file = os.path.join(output_dir, file)
-            old_file_path = os.path.join(old_dir, file)
-            if os.path.isfile(existing_file):
-                if os.path.exists(old_file_path):
-                    os.remove(old_file_path)
-                os.rename(existing_file, old_file_path)
-
-            # ==== Nuke Node Layout ====
-    spacing = 180
-    start_x = 0
-    lgt_ypos = 0
-    cmp_ypos = 200
-    contact_ypos = 400
-
-    sorted_images = sorted(image_tuples, key=lambda x: os.path.basename(x[0]))
-    print(f"🧪 Generating Nuke script for {len(sorted_images)} images...")
-
-    read_positions = []
-    nuke_lines = []
-
-    for idx, (img_path, dept) in enumerate(sorted_images):
-        file_path = img_path.replace("\\", "/")
-        xpos = start_x + idx * spacing
-        ypos = lgt_ypos if dept == "LGT" else cmp_ypos
-
-        # Set color based on department
-            #The colors work opposite for some reason
-        if dept == "LGT":
-            color = "0xffbf00ff"  # Yellow
-        else:
-            color = "0xaa55ffff"  # Purple
-
-        # Read node
-        nuke_lines.append("Read {")
-        nuke_lines.append(f" file \"{file_path}\"")
-        nuke_lines.append(f" name Read{idx+1}")
-        nuke_lines.append(f" xpos {xpos}")
-        nuke_lines.append(f" ypos {ypos}")
-        nuke_lines.append(f" tile_color {color}")
-        nuke_lines.append("}")
-        nuke_lines.append("")
-
-        # Dot node below the read
-        nuke_lines.append("Dot {")
-        nuke_lines.append(f" name Dot{idx+1}")
-        nuke_lines.append(f" xpos {xpos+34}")
-        nuke_lines.append(f" ypos {contact_ypos}")
-        nuke_lines.append("}")
-        nuke_lines.append("")
-
-        read_positions.append(xpos)
-
-    center_x = (read_positions[0] + read_positions[-1]) // 2 if read_positions else 0
-
-    # ContactSheet node, connected to Dots
-    nuke_lines.append("ContactSheet {")
-    nuke_lines.append(f" inputs {len(sorted_images)}")
-    nuke_lines.append(" width 4096 height 4096")
-    nuke_lines.append(f" rows {math.ceil(math.sqrt(len(sorted_images)))}")
-    nuke_lines.append(f" columns {math.ceil(math.sqrt(len(sorted_images)))}")
-    nuke_lines.append(" center true")
-    nuke_lines.append(f" xpos {center_x}")
-    nuke_lines.append(f" ypos {contact_ypos + 20}")
-    nuke_lines.append(" name ContactSheet1")
-    nuke_lines.append("}")
+    create_nuke_script(image_tuples, output_dir, folder_name, version)
 
 
-    print("🧪 Writing Nuke script to:", nuke_script_path)
-
-    with open(nuke_script_path, "w") as f:
-        f.write("\n".join(nuke_lines))
-
-    print(Fore.GREEN + f"✅ Nuke script created: {nuke_script_path}" + Style.RESET_ALL)
-
+# ===================================== OPEN FILE BROWSER ============================================
     if platform.system() == "Windows":
         os.startfile(output_dir)
     elif platform.system() == "Darwin":
