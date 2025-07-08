@@ -35,26 +35,32 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ==== CONFIGURATION ====
 def get_latest_versioned_files(renders_folder):
-    version_pattern = re.compile(r"^(.*?)(\.v\d{3})(.*?)\.png$")
-    latest_versions = {}
+    version_pattern = re.compile(r"^(.*?)(\.v\d{3})\.(\d{4})\.png$")  # Match base.v###.####.png
+    render_versions = {}
 
     for file in os.listdir(renders_folder):
         if file.endswith(".png"):
             match = version_pattern.match(file)
             if match:
-                prefix = match.group(1).strip(".")
-                suffix = match.group(3).strip(".")
-                version_match = match.group(2)
-                version = int(re.search(r"v(\d{3})", version_match).group(1))
-                render_name = f"{prefix}{suffix}"
+                base_name = match.group(1).strip(".")
+                version_str = match.group(2)
+                version = int(re.search(r"v(\d{3})", version_str).group(1))
 
-                if render_name not in latest_versions or version > latest_versions[render_name]["version"]:
-                    latest_versions[render_name] = {
-                        "version": version,
-                        "file": os.path.join(renders_folder, file)
-                    }
+                if base_name not in render_versions:
+                    render_versions[base_name] = {}
 
-    return [info["file"] for info in latest_versions.values()]
+                if version not in render_versions[base_name]:
+                    render_versions[base_name][version] = []
+
+                full_path = os.path.join(renders_folder, file)
+                render_versions[base_name][version].append(full_path)
+
+    latest_files = []
+    for base_name, versions in render_versions.items():
+        latest_version = max(versions.keys())
+        latest_files.extend(versions[latest_version])
+
+    return latest_files
 
 
 def gather_all_latest_images(root_folder):
@@ -205,18 +211,15 @@ if __name__ == "__main__":
     image_paths = gather_all_latest_images(input_folder)
 
     title = f"Contact Sheet for {folder_name}"
-    # Create 'Contact-Sheets' subfolder
     output_dir = os.path.join(input_folder, "Contact-Sheets")
     os.makedirs(output_dir, exist_ok=True)
 
-    # Determine next version number before moving old files
     version = 1
     for file in os.listdir(output_dir):
         match = re.search(rf"Contact-Sheet_{re.escape(folder_name)}(?:_labeled)?\.(\d+)\.jpg", file)
         if match:
             version = max(version, int(match.group(1)) + 1)
 
-    # Move old contact sheets to 'old' subfolder
     old_dir = os.path.join(output_dir, "old")
     os.makedirs(old_dir, exist_ok=True)
     for file in os.listdir(output_dir):
@@ -226,8 +229,6 @@ if __name__ == "__main__":
             if os.path.isfile(existing_file):
                 os.rename(existing_file, os.path.join(old_dir, file))
 
-
-    # Set output paths after determining version
     output_normal = os.path.join(output_dir, f"Contact-Sheet_{folder_name}.{version:03}.jpg")
     output_labeled = os.path.join(output_dir, f"Contact-Sheet_{folder_name}_labeled.{version:03}.jpg")
 
@@ -236,5 +237,4 @@ if __name__ == "__main__":
 
     print("✅ Contact sheets generated.")
 
-    # Open the sequence folder in Finder
     os.system(f"open '{output_dir}'")
