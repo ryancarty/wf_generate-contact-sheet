@@ -330,7 +330,7 @@ if __name__ == "__main__":
                         os.remove(old_file_path)
                     os.rename(existing_file, old_file_path)
 
-        # ==== Nuke Node Layout ====
+                # ==== Nuke Node Layout ====
         spacing = 180
         start_x = 0
         lgt_ypos = 0
@@ -343,79 +343,17 @@ if __name__ == "__main__":
         read_positions = []
         nuke_lines = []
 
-                # --- Optional Backdrops ---
-        def add_backdrop(name, label, color, nodes):
-            if not nodes:
-                return
-
-            x_values = [n[0] for n in nodes]
-            y_values = [n[1] for n in nodes]
-
-            min_x = min(x_values) - 100
-            max_x = max(x_values) + 100
-            min_y = min(y_values) - 50
-            max_y = max(y_values) + 150
-
-            width = max_x - min_x
-            height = max_y - min_y
-
-            nuke_lines.append("BackdropNode {")
-            nuke_lines.append(f" name {name}")
-            nuke_lines.append(f" label \"{label}\"")
-            nuke_lines.append(f" bdwidth {width}")
-            nuke_lines.append(f" bdheight {height}")
-            nuke_lines.append(f" xpos {min_x}")
-            nuke_lines.append(f" ypos {min_y}")
-            nuke_lines.append(f" appearance Border")
-            nuke_lines.append(f" note_font_size 42")
-            nuke_lines.append(f" tile_color {color}")
-            nuke_lines.append(f" hide_input true")
-            nuke_lines.append("}")
-            nuke_lines.append("")
-
-        # Track Read node positions by department
-        lgt_nodes = []
-        cmp_nodes = []
-
         for idx, (img_path, dept) in enumerate(sorted_images):
             file_path = img_path.replace("\\", "/")
             xpos = start_x + idx * spacing
             ypos = lgt_ypos if dept == "LGT" else cmp_ypos
 
-            # Read node
-            nuke_lines.append("Read {")
-            nuke_lines.append(f" file \"{file_path}\"")
-            nuke_lines.append(f" name Read{idx+1}")
-            nuke_lines.append(f" xpos {xpos}")
-            nuke_lines.append(f" ypos {ypos}")
-            nuke_lines.append("}")
-            nuke_lines.append("")
-
-            # Track position
+            # Set color based on department
+                #The colors work opposite for some reason
             if dept == "LGT":
-                lgt_nodes.append((xpos, ypos))
+                color = "0xffbf00ff"  # Yellow
             else:
-                cmp_nodes.append((xpos, ypos))
-
-            # Dot node below the read
-            nuke_lines.append("Dot {")
-            nuke_lines.append(f" name Dot{idx+1}")
-            nuke_lines.append(f" xpos {xpos + 34}")
-            nuke_lines.append(f" ypos {contact_ypos}")
-            nuke_lines.append("}")
-            nuke_lines.append("")
-
-            read_positions.append(xpos)
-
-        # Add backdrops
-        add_backdrop("Backdrop_LGT", "LGT", "0xaa55ffff", lgt_nodes)  # Yellow border
-        add_backdrop("Backdrop_CMP", "CMP", "0xffbf00ff", cmp_nodes)  # Purple border
-
-
-        for idx, (img_path, dept) in enumerate(sorted_images):
-            file_path = img_path.replace("\\", "/")
-            xpos = start_x + idx * spacing
-            ypos = lgt_ypos if dept == "LGT" else cmp_ypos
+                color = "0xaa55ffff"  # Purple
 
             # Read node
             nuke_lines.append("Read {")
@@ -423,6 +361,7 @@ if __name__ == "__main__":
             nuke_lines.append(f" name Read{idx+1}")
             nuke_lines.append(f" xpos {xpos}")
             nuke_lines.append(f" ypos {ypos}")
+            nuke_lines.append(f" tile_color {color}")
             nuke_lines.append("}")
             nuke_lines.append("")
 
