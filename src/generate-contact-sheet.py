@@ -188,7 +188,15 @@ def create_contact_sheet(image_tuples, output_path, title_text, labeled=False):
 
 # ==== MAIN EXECUTION ====
 if __name__ == "__main__":
-    base_path = "/Volumes/3dContent/PostProduction_WorkingLocation/Ryan/CODE/Contact-Sheet-Generator/Dummy-Server"
+    # Set base path depending on OS
+    if platform.system() == "Windows":
+        base_path = r"\\csnzoo.com\services\imagedata\3dContent\PostProduction_WorkingLocation\Ryan\CODE\Contact-Sheet-Generator\Dummy-Server"
+    elif platform.system() == "Darwin":  # macOS
+        base_path = "/Volumes/3dContent/PostProduction_WorkingLocation/Ryan/CODE/Contact-Sheet-Generator/Dummy-Server"
+    else:
+        print("❌ Unsupported operating system.")
+        sys.exit()
+
     folders = [f for f in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, f)) and f.startswith("25")]
 
     print()
