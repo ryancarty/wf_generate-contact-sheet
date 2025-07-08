@@ -7,13 +7,17 @@ import math
 import platform
 
 # ==== DEPENDENCY CHECK ====
-required_module = "PIL"
-install_name = "Pillow"
+dependencies = {
+    "PIL": "Pillow",
+    "colorama": "colorama"
+}
+
 missing = []
-try:
-    __import__(required_module)
-except ImportError:
-    missing.append(install_name)
+for module_name, install_name in dependencies.items():
+    try:
+        __import__(module_name)
+    except ImportError:
+        missing.append(install_name)
 
 if missing:
     missing_list = ', '.join(missing)
@@ -33,6 +37,10 @@ if missing:
 
 # ==== SAFE IMPORT (after dependency check) ====
 from PIL import Image, ImageDraw, ImageFont
+from colorama import init, Fore, Style
+
+# Initialize colorama
+init()
 
 # ==== CONFIGURATION ====
 def get_latest_versioned_files(renders_folder):
@@ -75,7 +83,6 @@ def gather_all_latest_images(root_folder):
                     latest_images.extend([(img, "CMP") for img in cmp_images])
                     continue
 
-            # Fallback to LGT if CMP fails
             lgt_renders = root.replace(os.path.join("CMP", "work"), os.path.join("LGT", "work"))
             lgt_renders = os.path.join(lgt_renders, "renders")
             if os.path.isdir(lgt_renders):
@@ -86,26 +93,22 @@ def gather_all_latest_images(root_folder):
     return latest_images
 
 
-# ==== TEXT COLOR BASED ON BACKGROUND ====
 def get_text_color(bg):
     luminance = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
     return (255, 255, 255) if luminance < 128 else (0, 0, 0)
 
 
-# ==== IMAGE RESIZING ====
 def resize_to_height(img, height):
     w, h = img.size
     new_width = int((w / h) * height)
     return img.resize((new_width, height))
 
 
-# ==== EXTRACT SH CODE ====
 def extract_sh_code(filename):
     match = re.search(r"(sh\d+)", filename)
     return match.group(1) if match else ""
 
 
-# ==== CONTACT SHEET CREATION ====
 def create_contact_sheet(image_tuples, output_path, title_text, labeled=False):
     fixed_height = 200
     padding = 10
@@ -146,16 +149,23 @@ def create_contact_sheet(image_tuples, output_path, title_text, labeled=False):
     draw = ImageDraw.Draw(contact_sheet)
 
     try:
-        font = ImageFont.truetype("Arial.ttf", 32)
-    except:
-        font = ImageFont.load_default()
+        if platform.system() == "Windows":
+            label_font = ImageFont.truetype("arial.ttf", 32)
+        elif platform.system() == "Darwin":
+            label_font = ImageFont.truetype("Arial.ttf", 32)
+        elif platform.system() == "Linux":
+            label_font = ImageFont.truetype("Arial.ttf", 32)
+        
+    except Exception as e:
+        print("⚠️ Font fallback activated:", e)
+        label_font = ImageFont.load_default()
 
-    bbox = font.getbbox(title_text)
+    bbox = label_font.getbbox(title_text)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     title_x = (sheet_width - text_width) // 2
     title_y = (title_height - text_height) // 2
-    draw.text((title_x, title_y), title_text, fill=text_color, font=font)
+    draw.text((title_x, title_y), title_text, fill=text_color, font=label_font)
 
     for i, (img_path, img, dept) in enumerate(resized_images):
         row = i // columns
@@ -177,22 +187,29 @@ def create_contact_sheet(image_tuples, output_path, title_text, labeled=False):
 
             if label:
                 try:
-                    label_font = ImageFont.truetype("Arial.ttf", 16)
-                except:
+                    if platform.system() == "Windows":
+                        label_font = ImageFont.truetype("arial.ttf", 16)
+                    elif platform.system() == "Darwin":
+                        label_font = ImageFont.truetype("Arial.ttf", 16)
+                    elif platform.system() == "Linux":
+                        label_font = ImageFont.truetype("Arial.ttf", 16)
+                except Exception as e:
+                    print("⚠️ Font fallback activated:", e)
                     label_font = ImageFont.load_default()
                 draw.text((x_offsets[col] + 5, y + 5), label, fill=text_color, font=label_font)
 
     contact_sheet.save(output_path)
-    print(f"✅ Saved: {output_path}")
+    print(f"{Fore.GREEN}✅ Saved: {output_path}{Style.RESET_ALL}")
 
 
 # ==== MAIN EXECUTION ====
 if __name__ == "__main__":
-    # Set base path depending on OS
     if platform.system() == "Windows":
-        base_path = r"\\csnzoo.com\services\imagedata\3dContent\PostProduction_WorkingLocation\Ryan\CODE\Contact-Sheet-Generator\Dummy-Server"
-    elif platform.system() == "Darwin":  # macOS
-        base_path = "/Volumes/3dContent/PostProduction_WorkingLocation/Ryan/CODE/Contact-Sheet-Generator/Dummy-Server"
+        #base_path = r"\\csnzoo.com\services\imagedata\3dContent\PostProduction_WorkingLocation\Ryan\CODE\Contact-Sheet-Generator\Dummy-Server"
+        base_path = r"\\csnzoo.com\services\imagedata\3dContent\sg_flow"
+    elif platform.system() == "Darwin":
+        #base_path = "/Volumes/3dContent/PostProduction_WorkingLocation/Ryan/CODE/Contact-Sheet-Generator/Dummy-Server"
+        base_path = "/Volumes/3dContent/sg_flow"
     else:
         print("❌ Unsupported operating system.")
         sys.exit()
@@ -200,11 +217,12 @@ if __name__ == "__main__":
     folders = [f for f in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, f)) and f.startswith("25")]
 
     print()
-    print("\033[35mAvailable top-level folders:\033[33m")
+    print(Fore.MAGENTA + "Available top-level folders:" + Fore.YELLOW)
     for i, folder in enumerate(folders):
         print(f"{i + 1}. {folder}")
+    print(Style.RESET_ALL)
 
-    choice = input("\033[32mSelect a folder by number: \033[0m").strip()
+    choice = input(Fore.GREEN + "Select a folder by number: " + Style.RESET_ALL).strip()
     if not choice.isdigit() or int(choice) < 1 or int(choice) > len(folders):
         print("Invalid selection.")
         exit()
@@ -223,15 +241,18 @@ if __name__ == "__main__":
         print("No subfolders found in the 'sequences' directory.")
         exit()
 
-    print("\033[35mAvailable sequence folders:\033[33m")
+    print(Fore.MAGENTA + "Available sequence folders:" + Fore.YELLOW)
     for i, folder in enumerate(sequence_folders):
         print(f"{i + 1}. {folder}")
+    print(Style.RESET_ALL)
 
-    sub_choice = input("\033[32mSelect a sequence folder by number: \033[0m").strip()
+    sub_choice = input(Fore.GREEN + "Select a sequence folder by number: " + Style.RESET_ALL).strip()
     if not sub_choice.isdigit() or int(sub_choice) < 1 or int(sub_choice) > len(sequence_folders):
         print("Invalid selection.")
         exit()
     print()
+
+    print("Generating contact sheet...folder will open when it is complete...")
 
     selected_sequence_folder = sequence_folders[int(sub_choice) - 1]
     input_folder = os.path.join(sequences_path, selected_sequence_folder)
@@ -255,20 +276,27 @@ if __name__ == "__main__":
         match = re.search(rf"Contact-Sheet_{re.escape(folder_name)}(?:_labeled)?\.(\d+)\.jpg", file)
         if match and int(match.group(1)) < version:
             existing_file = os.path.join(output_dir, file)
+            old_file_path = os.path.join(old_dir, file)
             if os.path.isfile(existing_file):
-                os.rename(existing_file, os.path.join(old_dir, file))
+                if os.path.exists(old_file_path):
+                    os.remove(old_file_path)  # Delete existing file to avoid WinError 183
+                os.rename(existing_file, old_file_path)
+
+            #if os.path.isfile(existing_file):
+                #os.rename(existing_file, os.path.join(old_dir, file))
 
     output_normal = os.path.join(output_dir, f"Contact-Sheet_{folder_name}.{version:03}.jpg")
     output_labeled = os.path.join(output_dir, f"Contact-Sheet_{folder_name}_labeled.{version:03}.jpg")
 
     create_contact_sheet(image_tuples, output_normal, title, labeled=False)
+    print("One more to go...")
     create_contact_sheet(image_tuples, output_labeled, title, labeled=True)
 
-    print("✅ Contact sheets generated.")
+    print(Fore.GREEN + "✅ Contact sheets generated." + Style.RESET_ALL)
 
     if platform.system() == "Windows":
         os.startfile(output_dir)
-    elif platform.system() == "Darwin":  # macOS
+    elif platform.system() == "Darwin":
         os.system(f"open '{output_dir}'")
     elif platform.system() == "Linux":
         os.system(f"xdg-open '{output_dir}'")
