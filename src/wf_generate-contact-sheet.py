@@ -330,7 +330,7 @@ if __name__ == "__main__":
                         os.remove(old_file_path)
                     os.rename(existing_file, old_file_path)
 
-        # ==== Nuke Node Layout ====
+                # ==== Nuke Node Layout ====
         spacing = 180
         start_x = 0
         lgt_ypos = 0
@@ -348,6 +348,7 @@ if __name__ == "__main__":
             xpos = start_x + idx * spacing
             ypos = lgt_ypos if dept == "LGT" else cmp_ypos
 
+            # Read node
             nuke_lines.append("Read {")
             nuke_lines.append(f" file \"{file_path}\"")
             nuke_lines.append(f" name Read{idx+1}")
@@ -356,10 +357,19 @@ if __name__ == "__main__":
             nuke_lines.append("}")
             nuke_lines.append("")
 
+            # Dot node below the read
+            nuke_lines.append("Dot {")
+            nuke_lines.append(f" name Dot{idx+1}")
+            nuke_lines.append(f" xpos {xpos}")
+            nuke_lines.append(f" ypos {contact_ypos}")
+            nuke_lines.append("}")
+            nuke_lines.append("")
+
             read_positions.append(xpos)
 
         center_x = (read_positions[0] + read_positions[-1]) // 2 if read_positions else 0
 
+        # ContactSheet node, connected to Dots
         nuke_lines.append("ContactSheet {")
         nuke_lines.append(f" inputs {len(sorted_images)}")
         nuke_lines.append(" width 4096 height 4096")
@@ -367,9 +377,10 @@ if __name__ == "__main__":
         nuke_lines.append(f" columns {math.ceil(math.sqrt(len(sorted_images)))}")
         nuke_lines.append(" center true")
         nuke_lines.append(f" xpos {center_x}")
-        nuke_lines.append(f" ypos {contact_ypos}")
+        nuke_lines.append(f" ypos {contact_ypos + 200}")
         nuke_lines.append(" name ContactSheet1")
         nuke_lines.append("}")
+
 
         print("🧪 Writing Nuke script to:", nuke_script_path)
 
