@@ -12,7 +12,7 @@ missing = []
 try:
     __import__(required_module)
 except ImportError:
-    missing.append(install_name)  # Use actual pip package name
+    missing.append(install_name)
 
 if missing:
     missing_list = ', '.join(missing)
@@ -35,7 +35,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ==== CONFIGURATION ====
 def get_latest_versioned_files(renders_folder):
-    version_pattern = re.compile(r"^(.*?)(\.v\d{3})\.(\d{4})\.png$")  # Match base.v###.####.png
+    version_pattern = re.compile(r"^(.*?)(\.v\d{3})\.(\d{4})\.png$")
     render_versions = {}
 
     for file in os.listdir(renders_folder):
@@ -153,7 +153,12 @@ def create_contact_sheet(image_paths, output_path, title_text, labeled=False):
         contact_sheet.paste(img, (x, y))
 
         if labeled:
-            label = extract_sh_code(os.path.basename(img_path))
+            filename = os.path.basename(img_path)
+            sh_code = extract_sh_code(filename)
+            version_match = re.search(r"\.v(\d{3})\.", filename)
+            version_str = f"_v{version_match.group(1)}" if version_match else ""
+            label = f"{sh_code}{version_str}" if sh_code else version_str
+
             if label:
                 try:
                     label_font = ImageFont.truetype("Arial.ttf", 16)
