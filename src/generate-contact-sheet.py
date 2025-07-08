@@ -4,6 +4,7 @@ import subprocess
 import re
 from pathlib import Path
 import math
+import platform
 
 # ==== DEPENDENCY CHECK ====
 required_module = "PIL"
@@ -66,8 +67,22 @@ def get_latest_versioned_files(renders_folder):
 def gather_all_latest_images(root_folder):
     latest_images = []
     for root, dirs, files in os.walk(root_folder):
-        if root.endswith(os.path.join("CMP", "work", "renders")):
-            latest_images.extend(get_latest_versioned_files(root))
+        if root.endswith(os.path.join("CMP", "work")):
+            cmp_renders = os.path.join(root, "renders")
+            if os.path.isdir(cmp_renders):
+                cmp_images = get_latest_versioned_files(cmp_renders)
+                if cmp_images:
+                    latest_images.extend([(img, "CMP") for img in cmp_images])
+                    continue
+
+            # Fallback to LGT if CMP fails
+            lgt_renders = root.replace(os.path.join("CMP", "work"), os.path.join("LGT", "work"))
+            lgt_renders = os.path.join(lgt_renders, "renders")
+            if os.path.isdir(lgt_renders):
+                lgt_images = get_latest_versioned_files(lgt_renders)
+                if lgt_images:
+                    latest_images.extend([(img, "LGT") for img in lgt_images])
+
     return latest_images
 
 
@@ -91,14 +106,14 @@ def extract_sh_code(filename):
 
 
 # ==== CONTACT SHEET CREATION ====
-def create_contact_sheet(image_paths, output_path, title_text, labeled=False):
+def create_contact_sheet(image_tuples, output_path, title_text, labeled=False):
     fixed_height = 200
     padding = 10
     title_height = 60
     bg_color = (255, 255, 255)
     text_color = get_text_color(bg_color)
 
-    num_images = len(image_paths)
+    num_images = len(image_tuples)
     if num_images == 0:
         raise ValueError("No images to process.")
 
@@ -112,10 +127,10 @@ def create_contact_sheet(image_paths, output_path, title_text, labeled=False):
     resized_images = []
     max_widths_per_column = [0] * columns
 
-    for i, img_path in enumerate(image_paths):
+    for i, (img_path, dept) in enumerate(image_tuples):
         img = Image.open(img_path)
         img = resize_to_height(img, fixed_height)
-        resized_images.append((img_path, img))
+        resized_images.append((img_path, img, dept))
 
         col = i % columns
         max_widths_per_column[col] = max(max_widths_per_column[col], img.width)
@@ -142,7 +157,7 @@ def create_contact_sheet(image_paths, output_path, title_text, labeled=False):
     title_y = (title_height - text_height) // 2
     draw.text((title_x, title_y), title_text, fill=text_color, font=font)
 
-    for i, (img_path, img) in enumerate(resized_images):
+    for i, (img_path, img, dept) in enumerate(resized_images):
         row = i // columns
         col = i % columns
         col_width = max_widths_per_column[col]
@@ -157,7 +172,8 @@ def create_contact_sheet(image_paths, output_path, title_text, labeled=False):
             sh_code = extract_sh_code(filename)
             version_match = re.search(r"\.v(\d{3})\.", filename)
             version_str = f"_v{version_match.group(1)}" if version_match else ""
-            label = f"{sh_code}{version_str}" if sh_code else version_str
+            dept_str = f"_{dept}" if dept else ""
+            label = f"{sh_code}{dept_str}{version_str}" if sh_code else f"{dept_str}{version_str}"
 
             if label:
                 try:
@@ -213,7 +229,7 @@ if __name__ == "__main__":
     input_folder = os.path.join(sequences_path, selected_sequence_folder)
 
     folder_name = os.path.basename(os.path.normpath(input_folder))
-    image_paths = gather_all_latest_images(input_folder)
+    image_tuples = gather_all_latest_images(input_folder)
 
     title = f"Contact Sheet for {folder_name}"
     output_dir = os.path.join(input_folder, "Contact-Sheets")
@@ -237,9 +253,14 @@ if __name__ == "__main__":
     output_normal = os.path.join(output_dir, f"Contact-Sheet_{folder_name}.{version:03}.jpg")
     output_labeled = os.path.join(output_dir, f"Contact-Sheet_{folder_name}_labeled.{version:03}.jpg")
 
-    create_contact_sheet(image_paths, output_normal, title, labeled=False)
-    create_contact_sheet(image_paths, output_labeled, title, labeled=True)
+    create_contact_sheet(image_tuples, output_normal, title, labeled=False)
+    create_contact_sheet(image_tuples, output_labeled, title, labeled=True)
 
     print("✅ Contact sheets generated.")
 
-    os.system(f"open '{output_dir}'")
+    if platform.system() == "Windows":
+        os.startfile(output_dir)
+    elif platform.system() == "Darwin":  # macOS
+        os.system(f"open '{output_dir}'")
+    elif platform.system() == "Linux":
+        os.system(f"xdg-open '{output_dir}'")
