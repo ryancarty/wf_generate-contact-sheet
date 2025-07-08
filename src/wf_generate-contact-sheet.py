@@ -300,3 +300,56 @@ if __name__ == "__main__":
         os.system(f"open '{output_dir}'")
     elif platform.system() == "Linux":
         os.system(f"xdg-open '{output_dir}'")
+
+
+
+# ==== OPTIONAL NUKE SCRIPT EXECUTION ====
+            # Ask if user wants to create a Nuke script
+    make_nuke = input(Fore.CYAN + "\nWould you like to generate a Nuke script from these images? (y/n): " + Style.RESET_ALL).strip().lower()
+    if make_nuke == "y":
+        print("Generating Nuke script...")
+
+        # Find a safe versioned name for the .nk file
+        nuke_script_name = f"Contact-Sheet_{folder_name}.{version:03}.nk"
+        nuke_script_path = os.path.join(output_dir, nuke_script_name)
+
+        # Move all old .nk and .nk.autosave files first
+        for file in os.listdir(output_dir):
+            if re.match(rf"Contact-Sheet_{re.escape(folder_name)}\.\d+\.(nk|nk\.autosave)$", file):
+                existing_file = os.path.join(output_dir, file)
+                old_file_path = os.path.join(old_dir, file)
+                if os.path.isfile(existing_file):
+                    if os.path.exists(old_file_path):
+                        os.remove(old_file_path)
+                    os.rename(existing_file, old_file_path)
+
+        # Start writing the .nk content
+        nuke_lines = []
+
+        # Sort images nicely
+        sorted_images = sorted(image_tuples, key=lambda x: os.path.basename(x[0]))
+
+        for idx, (img_path, dept) in enumerate(sorted_images):
+            file_path = img_path.replace("\\", "/")  # Forward slashes for Nuke
+            nuke_lines.append(f"Read {{")
+            nuke_lines.append(f" file \"{file_path}\"")
+            nuke_lines.append(f" name Read{idx+1}")
+            nuke_lines.append(f"}}")
+            nuke_lines.append("")  # Space between nodes
+
+        nuke_lines.append(f"ContactSheet {{")
+        nuke_lines.append(f" inputs {len(sorted_images)}")
+        nuke_lines.append(f" width 4096 height 4096")
+        nuke_lines.append(f" rows {math.ceil(math.sqrt(len(sorted_images)))}")
+        nuke_lines.append(f" columns {math.ceil(math.sqrt(len(sorted_images)))}")
+        nuke_lines.append(f" center true")
+        nuke_lines.append(f" name ContactSheet1")
+        nuke_lines.append(f"}}")
+
+        # Write out the .nk file
+        with open(nuke_script_path, "w") as f:
+            f.write("\n".join(nuke_lines))
+
+        print(Fore.GREEN + f"✅ Nuke script created: {nuke_script_path}" + Style.RESET_ALL)
+    else:
+        print("Skipping Nuke script creation.")
